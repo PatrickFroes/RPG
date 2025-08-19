@@ -5,6 +5,16 @@ function isAdjacent(a, b) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
 }
 
+// Rola D20
+function DiceRole({ sides = 20, onRole }) {
+  const [result, setResult] = useState(null);
+  const handleRole = () => {
+    const value = Math.floor(Math.random() * sides) + 1;
+    setResult(value);
+    if (onRole) onRole(value);
+  };
+}
+
 // Distância Manhattan (para ranged)
 function manhattanDistance(a, b) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);

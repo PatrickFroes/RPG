@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 
 const CLASS_CONFIG = {
   Guerreiro: { hp: 30, atk: 7, attackType: 'Melee', range: 1 },
-  Arqueiro:  { hp: 20, atk: 5, attackType: 'Ranged', range: 8 },
-  Mago:      { hp: 18, atk: 6, attackType: 'Ranged', range: 6 },
-  Ladino:    { hp: 22, atk: 5, attackType: 'Ranged', range: 6 },
+  Arqueiro: { hp: 20, atk: 5, attackType: 'Ranged', range: 8 },
+  Mago: { hp: 18, atk: 6, attackType: 'Ranged', range: 6 },
+  Ladino: { hp: 22, atk: 5, attackType: 'Ranged', range: 6 },
+  Feiticeiro: { hp: 16, atk: 7, attackType: 'Ranged', range: 7 },
 };
 
 export default function CharacterCreator({ characters, setCharacters }) {
@@ -17,6 +18,13 @@ export default function CharacterCreator({ characters, setCharacters }) {
   const [attackType, setAttackType] = useState("");
   const [range, setRange] = useState(1);
   const [error, setError] = useState("");
+
+  // atributos
+  const [str, setStr] = useState(0);
+  const [dex, setDex] = useState(0);
+  const [int, setInt] = useState(0);
+  const [cha, setCha] = useState(0);
+  const [ac, setAc] = useState(10);
 
   function handleInput(setter) {
     return e => setter(e.target.value);
@@ -41,7 +49,7 @@ export default function CharacterCreator({ characters, setCharacters }) {
     }
   }
 
-  // Raça define velocidade (tamanho)
+  // Raça define velocidade
   function handleRaceChange(e) {
     const value = e.target.value;
     setRace(value);
@@ -68,6 +76,11 @@ export default function CharacterCreator({ characters, setCharacters }) {
         currentHp: hp,
         attackType,
         range,
+        str,
+        dex,
+        int,
+        cha,
+        ac,
       }
     ]);
     setName("");
@@ -78,6 +91,11 @@ export default function CharacterCreator({ characters, setCharacters }) {
     setSpd(5);
     setAttackType("");
     setRange(1);
+    setStr(0);
+    setDex(0);
+    setInt(0);
+    setCha(0);
+    setAc(10);
     setError("");
   }
 
@@ -90,7 +108,8 @@ export default function CharacterCreator({ characters, setCharacters }) {
         <span style={{ color: "#a21caf" }}> SPD:{c.spd}</span> /
         <span style={{ color: "#f59e0b" }}>
           {" "}ATQ:{c.attackType}{c.attackType ? ` (alcance ${c.range})` : ""}
-        </span>
+        </span> /
+        <span> 💪FOR:{c.str} 🎯DES:{c.dex} 🧠INT:{c.int} 😎CAR:{c.cha} 🛡AC:{c.ac}</span>
       </li>
     ));
   }
@@ -131,30 +150,44 @@ export default function CharacterCreator({ characters, setCharacters }) {
         <option value="Mago">Mago</option>
         <option value="Arqueiro">Arqueiro</option>
         <option value="Ladino">Ladino</option>
+        <option value="Feiticeiro">Feiticeiro</option>
       </select>
 
-      <div className="flex-row" style={{ gap: "0.5rem" }}>
+      {/* Atributos principais */}
+      <div className="flex-row" style={{ gap: "0.5rem", alignItems: "center" }}>
+        ❤️ HP:
         <input
           type="number"
-          placeholder="HP (pela classe)"
+          readOnly
           value={hp}
-          readOnly
-          className="border p-1 w-40px bg-gray-100"
+          onChange={handleInput(setHp)}
+          className="border p-1 w-40px"
         />
+        ⚔️ ATK:
         <input
           type="number"
-          placeholder="Atk (pela classe)"
+          readOnly
           value={atk}
-          readOnly
-          className="border p-1 w-40px bg-gray-100"
+          onChange={handleInput(setAtk)}
+          className="border p-1 w-40px"
         />
+        🏃 SPD:
         <input
-          type="number"
-          placeholder="Agilidade"
-          value={spd}
           readOnly
-          className="border p-1 w-40px bg-gray-100"
+          type="number"
+          value={spd}
+          onChange={handleInput(setSpd)}
+          className="border p-1 w-40px"
         />
+      </div>
+
+      {/* Atributos secundários */}
+      <div className="flex-row" style={{ gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        💪 Força:<input type="number" value={str} onChange={handleInput(setStr)} className="border p-1 w-20"/>
+        🎯 Destreza:<input type="number" value={dex} onChange={handleInput(setDex)} className="border p-1 w-20"/>
+        🧠 Inteligência:<input type="number" value={int} onChange={handleInput(setInt)} className="border p-1 w-20"/>
+        😎 Carisma:<input type="number" value={cha} onChange={handleInput(setCha)} className="border p-1 w-20"/>
+        🛡 CA:<input type="number" value={ac} onChange={handleInput(setAc)} className="border p-1 w-20"/>
       </div>
 
       {cls && (
