@@ -169,6 +169,8 @@ export default function PlayScreen({ maps, characters }) {
     let damage = player.atk;
     let logs = [];
 
+    logs.push(`${player.name} ataca ${enemy.name}: Rolou ${roll}.`);
+
     if (roll === 1) {
       logs.push(`${player.name} errou o ataque!`);
     } else if (roll === 20) {
@@ -259,6 +261,8 @@ const masterAttackPlayer = (playerIdx) => {
   const roll = DiceRole(20); // Rola D20
   let damage = enemy.atk;
   let logs = [];
+
+  logs.push(`${enemy.name} ataca ${player.name}: Rolou ${roll}.`);
 
   if (roll === 1) {
     logs.push(`${enemy.name} errou o ataque!`);
