@@ -6,13 +6,8 @@ function isAdjacent(a, b) {
 }
 
 // Rola D20
-function DiceRole({ sides = 20, onRole }) {
-  const [result, setResult] = useState(null);
-  const handleRole = () => {
-    const value = Math.floor(Math.random() * sides) + 1;
-    setResult(value);
-    if (onRole) onRole(value);
-  };
+function DiceRole(sides = 20) {
+  return Math.floor(Math.random() * sides) + 1;
 }
 
 // Distância Manhattan (para ranged)
@@ -76,7 +71,7 @@ export default function PlayScreen({ maps, characters }) {
     setMapGrid(map);
     const enemies = [];
     map.forEach((row, i) => row.forEach((cell, j) => {
-      if (cell === 'enemy') enemies.push({ x: j, y: i, hp: 10, atk: 3, spd: 3, name: `Monstro ${j},${i}`, alive: true });
+      if (cell === 'enemy') enemies.push({ x: j, y: i, hp: 10, atk: 3, spd: 3, ac: 12, name: `Monstro ${j},${i}`, alive: true });
     }));
     setEnemyPositions(enemies);
     setPlayerPositions(Array(characters.length).fill(null));
@@ -153,26 +148,42 @@ export default function PlayScreen({ maps, characters }) {
   const attackEnemy = (enemyIdx) => {
     const active = turnOrder[turnIdx];
     if (!active || active.type !== 'player' || selectedAction !== 'attack') return;
+
     const player = playerPositions[active.idx];
     const enemy = enemyPositions[enemyIdx];
     if (!player || !enemy || !player.alive || !enemy.alive) return;
-
     if (!canPlayerAttackTarget(player, enemy)) return;
 
-    const newEnemies = [...enemyPositions];
-    const newEnemy = updateHp(enemy, player.atk);
-    newEnemies[enemyIdx] = newEnemy;
+    const roll = DiceRole(20); // Rola o D20
+    let damage = player.atk;
+    let logs = [];
 
-    const ranged = (player.attackType || '').toLowerCase() === 'ranged';
-    let logs = [
-      `${player.name} ${ranged ? 'disparou e ' : ''}atacou ${enemy.name} causando ${player.atk} de dano!`
-    ];
-    if (!newEnemy.alive) logs.push(`${enemy.name} foi derrotado!`);
-    setEnemyPositions(newEnemies);
+    if (roll === 1) {
+      logs.push(`${player.name} errou o ataque!`);
+    } else if (roll === 20) {
+      logs.push(`${player.name} acertou um acerto crítico!`);
+      damage *= 2;
+    } else if (roll >= enemy.ac) {
+      logs.push(`${player.name} atacou ${enemy.name} causando ${damage} de dano!`);
+    } else {
+      logs.push(`${player.name} errou o ataque!`);
+      damage = 0;
+    }
+
+    // Aplica dano se houver
+    if (damage > 0) {
+      const newEnemies = [...enemyPositions];
+      const newEnemy = updateHp(enemy, damage);
+      newEnemies[enemyIdx] = newEnemy;
+      if (!newEnemy.alive) logs.push(`${enemy.name} foi derrotado!`);
+      setEnemyPositions(newEnemies);
+    }
+
     setLog(prev => [...prev, ...logs]);
     setSelectedAction(null);
     endTurn();
   };
+
 
   const passTurn = () => {
     setLog(prev => [...prev, `${getActiveName()} passou o turno.`]);
