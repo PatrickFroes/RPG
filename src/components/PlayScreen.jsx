@@ -1,11 +1,28 @@
 import React, { useState } from 'react';
 
-// Função auxiliar para checar se duas posições são adjacentes
+// Adjacência (melee)
 function isAdjacent(a, b) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
 }
 
-// Função auxiliar para atualizar vida e status de vivo
+// Distância Manhattan (para ranged)
+function manhattanDistance(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+// Verifica se jogador pode atacar alvo: melee (adjacente) ou ranged (≤ range)
+function canPlayerAttackTarget(player, enemy) {
+  if (!player || !enemy) return false;
+  const type = (player.attackType || '').toLowerCase();
+  if (type === 'ranged') {
+    const r = Number(player.range || 0);
+    return manhattanDistance(player, enemy) <= r;
+  }
+  // padrão: melee
+  return isAdjacent(player, enemy);
+}
+
+// Atualiza vida e status
 function updateHp(obj, damage) {
   const newHp = obj.currentHp !== undefined ? obj.currentHp - damage : obj.hp - damage;
   return {
@@ -25,11 +42,10 @@ export default function PlayScreen({ maps, characters }) {
   const [log, setLog] = useState([]);
   const [turnOrder, setTurnOrder] = useState([]);
   const [turnIdx, setTurnIdx] = useState(0);
-  const [phase, setPhase] = useState('player'); // 'player' ou 'enemy'
-  const [selectedAction, setSelectedAction] = useState(null); // 'move', 'attack', 'pass'
+  const [phase, setPhase] = useState('player'); // 'player' | 'enemy'
+  const [selectedAction, setSelectedAction] = useState(null); // 'move' | 'attack' | 'pass'
   const [activeEnemyIdx, setActiveEnemyIdx] = useState(null);
 
-  // Reinicia o combate
   const handleStartCombat = () => {
     setStep('selectMap');
     setSelectedMap(null);
@@ -44,7 +60,6 @@ export default function PlayScreen({ maps, characters }) {
     setActiveEnemyIdx(null);
   };
 
-  // Seleciona o mapa e prepara para posicionar jogadores
   const handleSelectMap = (idx) => {
     const map = maps[idx];
     setSelectedMap(idx);
@@ -66,10 +81,11 @@ export default function PlayScreen({ maps, characters }) {
       if (idx === -1) return;
       if (playerPositions.some(p => p && p.x === j && p.y === i)) return;
       if (mapGrid[i][j] === 'wall' || mapGrid[i][j] === 'enemy') return;
+      const baseChar = characters[idx];
       const newPositions = [...playerPositions];
-      newPositions[idx] = { x: j, y: i, ...characters[idx], currentHp: characters[idx].hp, alive: true };
+      newPositions[idx] = { x: j, y: i, ...baseChar, currentHp: baseChar.hp, alive: true };
       setPlayerPositions(newPositions);
-      setLog(prev => [...prev, `${characters[idx].name} posicionado em (${i},${j})`]);
+      setLog(prev => [...prev, `${baseChar.name} posicionado em (${i},${j})`]);
       if (idx + 1 === characters.length) {
         const order = [
           ...newPositions.map((p, idx) => p && p.alive ? { type: 'player', idx, spd: p.spd } : null).filter(Boolean),
@@ -121,23 +137,26 @@ export default function PlayScreen({ maps, characters }) {
     }
   };
 
-  // Seleciona ação do personagem ativo
-  const chooseAction = (action) => {
-    setSelectedAction(action);
-  };
+  const chooseAction = (action) => setSelectedAction(action);
 
-  // Ataca inimigo adjacente
+  // Ataque do jogador (melee ou ranged)
   const attackEnemy = (enemyIdx) => {
     const active = turnOrder[turnIdx];
     if (!active || active.type !== 'player' || selectedAction !== 'attack') return;
     const player = playerPositions[active.idx];
     const enemy = enemyPositions[enemyIdx];
     if (!player || !enemy || !player.alive || !enemy.alive) return;
-    if (!isAdjacent(player, enemy)) return;
+
+    if (!canPlayerAttackTarget(player, enemy)) return;
+
     const newEnemies = [...enemyPositions];
     const newEnemy = updateHp(enemy, player.atk);
     newEnemies[enemyIdx] = newEnemy;
-    let logs = [`${player.name} atacou ${enemy.name} causando ${player.atk} de dano!`];
+
+    const ranged = (player.attackType || '').toLowerCase() === 'ranged';
+    let logs = [
+      `${player.name} ${ranged ? 'disparou e ' : ''}atacou ${enemy.name} causando ${player.atk} de dano!`
+    ];
     if (!newEnemy.alive) logs.push(`${enemy.name} foi derrotado!`);
     setEnemyPositions(newEnemies);
     setLog(prev => [...prev, ...logs]);
@@ -145,7 +164,6 @@ export default function PlayScreen({ maps, characters }) {
     endTurn();
   };
 
-  // Passar turno
   const passTurn = () => {
     setLog(prev => [...prev, `${getActiveName()} passou o turno.`]);
     setSelectedAction(null);
@@ -153,7 +171,6 @@ export default function PlayScreen({ maps, characters }) {
     endTurn();
   };
 
-  // Avança para o próximo da ordem de turno
   const endTurn = () => {
     let nextIdx = turnIdx + 1;
     let order = turnOrder;
@@ -183,13 +200,13 @@ export default function PlayScreen({ maps, characters }) {
     }
   };
 
-  // Mestre seleciona inimigo para agir
+  // Mestre seleciona inimigo
   const selectEnemyToAct = (idx) => {
     setActiveEnemyIdx(idx);
     setSelectedAction(null);
   };
 
-  // Mestre ataca jogador adjacente
+  // Ataque do inimigo (melee adjacente)
   const masterAttackPlayer = (playerIdx) => {
     if (activeEnemyIdx === null) return;
     const enemy = enemyPositions[activeEnemyIdx];
@@ -208,7 +225,6 @@ export default function PlayScreen({ maps, characters }) {
     endTurn();
   };
 
-  // Mestre passa o turno do inimigo
   const masterPassEnemy = () => {
     setLog(prev => [...prev, `O mestre passou o turno do monstro.`]);
     setSelectedAction(null);
@@ -216,7 +232,6 @@ export default function PlayScreen({ maps, characters }) {
     endTurn();
   };
 
-  // Nome do personagem ativo
   const getActiveName = () => {
     const active = turnOrder[turnIdx];
     if (!active) return "";
@@ -225,14 +240,13 @@ export default function PlayScreen({ maps, characters }) {
     return "";
   };
 
-  // Checa fim do combate
   const isCombatOver = () => {
     const playersAlive = playerPositions.some(p => p && p.alive);
     const enemiesAlive = enemyPositions.some(e => e.alive);
     return !playersAlive || !enemiesAlive;
   };
 
-  // Renderização
+  // Render
   const active = turnOrder[turnIdx];
   const isPlayerTurn = active && active.type === 'player' && phase === 'player' && step === 'combat' && !isCombatOver();
   const isMasterTurn = active && active.type === 'enemy' && phase === 'enemy' && step === 'combat' && !isCombatOver();
@@ -258,6 +272,7 @@ export default function PlayScreen({ maps, characters }) {
           </div>
         </div>
       )}
+
       {step === 'selectMap' && (
         <div>
           <h2 className="status-highlight" style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>Selecione um mapa:</h2>
@@ -267,11 +282,7 @@ export default function PlayScreen({ maps, characters }) {
                 <button
                   onClick={() => handleSelectMap(idx)}
                   className="btn btn-primary"
-                  style={{
-                    border: "2px solid #3b82f6",
-                    fontWeight: 600,
-                    fontSize: "1rem"
-                  }}
+                  style={{ border: "2px solid #3b82f6", fontWeight: 600, fontSize: "1rem" }}
                 >
                   Mapa {idx + 1}
                 </button>
@@ -280,20 +291,12 @@ export default function PlayScreen({ maps, characters }) {
           </ul>
         </div>
       )}
+
       {(step === 'placePlayers' || step === 'combat') && (
         <div>
-          <button
-            onClick={handleStartCombat}
-            className="btn btn-danger mb-4"
-          >
-            Reiniciar Combate
-          </button>
-          <div
-            className="grid-map mt-4"
-            style={{
-              gridTemplateColumns: `repeat(${mapGrid[0]?.length || 0},40px)`
-            }}
-          >
+          <button onClick={handleStartCombat} className="btn btn-danger mb-4">Reiniciar Combate</button>
+
+          <div className="grid-map mt-4" style={{ gridTemplateColumns: `repeat(${mapGrid[0]?.length || 0},40px)` }}>
             {mapGrid.map((row, i) => row.map((cell, j) => {
               const player = playerPositions.find((p, idx) => p && p.x === j && p.y === i && p.alive);
               const enemy = enemyPositions.find(e => e.x === j && e.y === i && e.alive);
@@ -302,9 +305,9 @@ export default function PlayScreen({ maps, characters }) {
                 <div
                   key={`${i}-${j}`}
                   onClick={() => handleCellClick(i, j)}
-                  className={`cell ${cell === 'wall' ? 'cell-wall' : cell === 'floor' ? 'cell-floor' : 'cell-enemy'} 
-                    ${player ? 'cell-player' : ''} 
-                    ${isActive ? 'cell-active' : ''} 
+                  className={`cell ${cell === 'wall' ? 'cell-wall' : cell === 'floor' ? 'cell-floor' : 'cell-enemy'}
+                    ${player ? 'cell-player' : ''}
+                    ${isActive ? 'cell-active' : ''}
                     ${enemy ? 'cell-enemy' : ''}`}
                   title={`(${i},${j})`}
                   onClickCapture={() => {
@@ -315,12 +318,12 @@ export default function PlayScreen({ maps, characters }) {
                 >
                   {cell === 'wall'
                     ? <span style={{ width: "100%", height: "100%", display: "block", background: "#3f3f46", borderRadius: 4 }} />
-                    : player ? '👤' : enemy ? '🐲' : ''
-                  }
+                    : player ? '👤' : enemy ? '🐲' : ''}
                 </div>
               );
             }))}
           </div>
+
           <div className="flex-row mt-4" style={{ gap: "2rem", justifyContent: "center" }}>
             <div>
               <h3 className="status-highlight" style={{ color: "#3b82f6" }}>Jogadores</h3>
@@ -328,6 +331,7 @@ export default function PlayScreen({ maps, characters }) {
                 {playerPositions.map((p, i) => p &&
                   <li key={i} className={p.alive ? "status-alive" : "status-dead"} style={{ fontWeight: active && active.type === 'player' && active.idx === i ? 700 : 400 }}>
                     {p.name} ({p.cls}) HP: {p.currentHp} {p.alive ? "" : "💀"}
+                    {p.attackType && ` • ${p.attackType} (alcance ${p.range || 1})`}
                   </li>
                 )}
               </ul>
@@ -343,52 +347,58 @@ export default function PlayScreen({ maps, characters }) {
               </ul>
             </div>
           </div>
+
           {step === 'combat' && isPlayerTurn && (
             <div className="text-center mt-4">
               <span className="status-highlight">Ação de {playerPositions[active.idx].name}: </span>
-              <button
-                className={`btn btn-primary m-2${selectedAction === 'move' ? ' cell-active' : ''}`}
-                onClick={() => chooseAction('move')}
-              >Mover</button>
-              <button
-                className={`btn btn-danger m-2${selectedAction === 'attack' ? ' cell-active' : ''}`}
-                onClick={() => chooseAction('attack')}
-              >Atacar</button>
-              <button
-                className="btn btn-neutral m-2"
-                onClick={passTurn}
-              >Passar</button>
+              <button className={`btn btn-primary m-2${selectedAction === 'move' ? ' cell-active' : ''}`} onClick={() => chooseAction('move')}>Mover</button>
+              <button className={`btn btn-danger m-2${selectedAction === 'attack' ? ' cell-active' : ''}`} onClick={() => chooseAction('attack')}>Atacar</button>
+              <button className="btn btn-neutral m-2" onClick={passTurn}>Passar</button>
             </div>
           )}
+
           {step === 'combat' && isPlayerTurn && selectedAction === 'attack' && (
             <div className="text-center">
-              <span>Escolha um inimigo adjacente para atacar:</span>
-              <div className="flex-row" style={{ gap: "1rem", justifyContent: "center", marginTop: "0.5rem" }}>
-                {enemyPositions.map((e, i) => {
-                  // Corrija para garantir que player está definido
-                  const p = active && active.type === 'player' ? playerPositions[active.idx] : null;
-                  if (!e.alive || !p) return null;
-                  const canAttack = isAdjacent(p, e);
-                  return (
-                    <button
-                      key={i}
-                      disabled={!canAttack}
-                      onClick={() => attackEnemy(i)}
-                      className="btn btn-danger"
-                      style={{ opacity: canAttack ? 1 : 0.5, cursor: canAttack ? "pointer" : "not-allowed" }}
-                    >
-                      {e.name} (HP: {e.hp})
-                    </button>
-                  );
-                })}
-              </div>
+              {(() => {
+                const p = playerPositions[active.idx];
+                const isRanged = (p.attackType || '').toLowerCase() === 'ranged';
+                return (
+                  <>
+                    <span>
+                      {isRanged
+                        ? `Escolha um inimigo até ${p.range} de distância.`
+                        : 'Escolha um inimigo adjacente para atacar:'}
+                    </span>
+                    <div className="flex-row" style={{ gap: "1rem", justifyContent: "center", marginTop: "0.5rem" }}>
+                      {enemyPositions.map((e, i) => {
+                        if (!e.alive || !p) return null;
+                        const canAttack = canPlayerAttackTarget(p, e);
+                        return (
+                          <button
+                            key={i}
+                            disabled={!canAttack}
+                            onClick={() => attackEnemy(i)}
+                            className="btn btn-danger"
+                            style={{ opacity: canAttack ? 1 : 0.5, cursor: canAttack ? "pointer" : "not-allowed" }}
+                            title={`Distância: ${manhattanDistance(p, e)}`}
+                          >
+                            {e.name} (HP: {e.hp})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
+
           {step === 'combat' && isPlayerTurn && selectedAction === 'move' && (
             <div className="text-center">
               <span>Clique em uma célula adjacente livre para mover.</span>
             </div>
           )}
+
           {step === 'combat' && isMasterTurn && (
             <div className="text-center mt-4">
               <span className="status-highlight">Turno do Mestre: escolha o monstro para agir</span>
@@ -409,39 +419,17 @@ export default function PlayScreen({ maps, characters }) {
                 <div>
                   <span>Ação do monstro {enemyPositions[activeEnemyIdx].name}:</span>
                   <div className="flex-row" style={{ gap: "1rem", justifyContent: "center", margin: "0.5rem 0" }}>
-                    <button
-                      className={`btn btn-primary${selectedAction === 'move' ? ' cell-active' : ''}`}
-                      onClick={() => setSelectedAction('move')}
-                    >
-                      Mover
-                    </button>
-                    <button
-                      className={`btn btn-danger${selectedAction === 'attack' ? ' cell-active' : ''}`}
-                      onClick={() => setSelectedAction('attack')}
-                    >
-                      Atacar
-                    </button>
-                    <button
-                      className="btn btn-neutral"
-                      onClick={masterPassEnemy}
-                    >
-                      Passar
-                    </button>
-                    <button
-                      className="btn btn-neutral"
-                      onClick={() => { setActiveEnemyIdx(null); setSelectedAction(null); }}
-                    >
-                      Cancelar
-                    </button>
+                    <button className={`btn btn-primary${selectedAction === 'move' ? ' cell-active' : ''}`} onClick={() => setSelectedAction('move')}>Mover</button>
+                    <button className={`btn btn-danger${selectedAction === 'attack' ? ' cell-active' : ''}`} onClick={() => setSelectedAction('attack')}>Atacar</button>
+                    <button className="btn btn-neutral" onClick={masterPassEnemy}>Passar</button>
+                    <button className="btn btn-neutral" onClick={() => { setActiveEnemyIdx(null); setSelectedAction(null); }}>Cancelar</button>
                   </div>
                   {selectedAction === 'attack' && (
                     <div className="flex-row" style={{ gap: "1rem", justifyContent: "center", margin: "0.5rem 0" }}>
                       {playerPositions.map((p, i) => {
                         const e = enemyPositions[activeEnemyIdx];
                         if (!p || !p.alive || !e) return null;
-                        const dx = Math.abs(p.x - e.x);
-                        const dy = Math.abs(p.y - e.y);
-                        const canAttack = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+                        const canAttack = isAdjacent(p, e); // inimigos ainda são melee
                         return (
                           <button
                             key={i}
@@ -457,29 +445,22 @@ export default function PlayScreen({ maps, characters }) {
                     </div>
                   )}
                   {selectedAction === 'move' && (
-                    <div className="mt-2">
-                      <span>Clique em uma célula adjacente livre no mapa para mover o monstro.</span>
-                    </div>
+                    <div className="mt-2"><span>Clique em uma célula adjacente livre no mapa para mover o monstro.</span></div>
                   )}
                 </div>
               )}
             </div>
           )}
+
           <div className="log-box">
             <div className="status-highlight">
               {step === 'combat' && isCombatOver() && (
                 <span style={{ color: "#22c55e" }}>
-                  {playerPositions.some(p => p && p.alive)
-                    ? "Vitória dos jogadores!"
-                    : "Os monstros venceram!"}
+                  {playerPositions.some(p => p && p.alive) ? "Vitória dos jogadores!" : "Os monstros venceram!"}
                 </span>
               )}
-              {step === 'combat' && !isCombatOver() && (
-                <span>Turno de: <b>{getActiveName() || "Mestre"}</b></span>
-              )}
-              {step === 'placePlayers' && (
-                <span>Posicione os jogadores no mapa.</span>
-              )}
+              {step === 'combat' && !isCombatOver() && <span>Turno de: <b>{getActiveName() || "Mestre"}</b></span>}
+              {step === 'placePlayers' && <span>Posicione os jogadores no mapa.</span>}
             </div>
             {log.slice(-8).map((l, i) => <div key={i}>{l}</div>)}
           </div>
