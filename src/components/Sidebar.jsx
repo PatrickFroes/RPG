@@ -6,6 +6,7 @@ export default function Sidebar({ setMode }) {
       <h1 className="sidebar-title">RPG Creator</h1>
       <button onClick={() => setMode("map")} className="btn btn-primary">Criar Mapa</button>
       <button onClick={() => setMode("char")} className="btn btn-secondary">Criar Personagem</button>
+      <button onClick={() => setMode("enemy")} className="btn btn-danger">Criar Inimigo</button>
       <button onClick={() => setMode("play")} className="btn btn-success">Jogar</button>
     </aside>
   );

@@ -71,7 +71,18 @@ export default function PlayScreen({ maps, characters }) {
     setMapGrid(map);
     const enemies = [];
     map.forEach((row, i) => row.forEach((cell, j) => {
-      if (cell === 'enemy') enemies.push({ x: j, y: i, hp: 10, atk: 3, spd: 3, ac: 12, name: `Monstro ${j},${i}`, alive: true });
+      if (cell?.type === 'enemy') {
+        enemies.push({
+          x: j,
+          y: i,
+          hp: cell.enemy.hp,
+          atk: cell.enemy.atk,
+          spd: cell.enemy.spd,
+          ac: cell.enemy.ac,
+          name: cell.enemy.name,
+          alive: true
+        });
+      }
     }));
     setEnemyPositions(enemies);
     setPlayerPositions(Array(characters.length).fill(null));
@@ -227,24 +238,55 @@ export default function PlayScreen({ maps, characters }) {
     setSelectedAction(null);
   };
 
-  // Ataque do inimigo (melee adjacente)
-  const masterAttackPlayer = (playerIdx) => {
-    if (activeEnemyIdx === null) return;
-    const enemy = enemyPositions[activeEnemyIdx];
-    const player = playerPositions[playerIdx];
-    if (!enemy || !player || !enemy.alive || !player.alive) return;
-    if (!isAdjacent(player, enemy)) return;
+  // Ataque do inimigo (mestre) - melee ou ranged
+const masterAttackPlayer = (playerIdx) => {
+  if (activeEnemyIdx === null) return;
+  const enemy = enemyPositions[activeEnemyIdx];
+  const player = playerPositions[playerIdx];
+  if (!enemy || !player || !enemy.alive || !player.alive) return;
+
+  // Verifica se o alvo está no alcance
+  const type = (enemy.attackType || '').toLowerCase();
+  let inRange = false;
+  if (type === 'ranged') {
+    const r = Number(enemy.range || 0);
+    inRange = manhattanDistance(enemy, player) <= r;
+  } else {
+    inRange = isAdjacent(enemy, player);
+  }
+  if (!inRange) return;
+
+  const roll = DiceRole(20); // Rola D20
+  let damage = enemy.atk;
+  let logs = [];
+
+  if (roll === 1) {
+    logs.push(`${enemy.name} errou o ataque!`);
+    damage = 0;
+  } else if (roll === 20) {
+    logs.push(`${enemy.name} acertou um crítico em ${player.name}!`);
+    damage *= 2;
+  } else if (roll >= player.ac) {
+    logs.push(`${enemy.name} atacou ${player.name} causando ${damage} de dano!`);
+  } else {
+    logs.push(`${enemy.name} errou o ataque!`);
+    damage = 0;
+  }
+
+  if (damage > 0) {
     const newPlayers = [...playerPositions];
-    const newPlayer = updateHp(player, enemy.atk);
+    const newPlayer = updateHp(player, damage);
     newPlayers[playerIdx] = newPlayer;
-    let logs = [`${enemy.name} atacou ${player.name} causando ${enemy.atk} de dano!`];
     if (!newPlayer.alive) logs.push(`${player.name} foi derrotado!`);
     setPlayerPositions(newPlayers);
-    setLog(prev => [...prev, ...logs]);
-    setSelectedAction(null);
-    setActiveEnemyIdx(null);
-    endTurn();
-  };
+  }
+
+  setLog(prev => [...prev, ...logs]);
+  setSelectedAction(null);
+  setActiveEnemyIdx(null);
+  endTurn();
+};
+
 
   const masterPassEnemy = () => {
     setLog(prev => [...prev, `O mestre passou o turno do monstro.`]);
