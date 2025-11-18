@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
+import { CLASS_CONFIG, RACE_BONUS_CONFIG } from "../data/entityData.js"
+import { Container } from "./Containers"
+import { Button } from "./Inputs"
+import AnimatedEnemySprite from "../data/functions.jsx"
+import { saveCharacter, removeCharacter } from "../api"
 
-const CLASS_CONFIG = {
-  Guerreiro: { hp: 30, atk: 7, attackType: 'Melee', range: 1 },
-  Arqueiro: { hp: 20, atk: 5, attackType: 'Ranged', range: 8 },
-  Mago: { hp: 18, atk: 6, attackType: 'Ranged', range: 6 },
-  Ladino: { hp: 22, atk: 5, attackType: 'Ranged', range: 6 },
-  Feiticeiro: { hp: 16, atk: 7, attackType: 'Ranged', range: 7 },
-};
 
 export default function CharacterCreator({ characters, setCharacters }) {
   const [name, setName] = useState("");
@@ -31,179 +29,403 @@ export default function CharacterCreator({ characters, setCharacters }) {
   }
 
   // Classe define HP, ATK, tipo e alcance
-  function handleClassChange(e) {
-    const value = e.target.value;
-    setCls(value);
+  function handleClassChange(classValue) {
+    setCls(classValue);
 
-    const cfg = CLASS_CONFIG[value];
+    const cfg = CLASS_CONFIG[classValue];
+    const raceBonus = RACE_BONUS_CONFIG[race];
+    
     if (cfg) {
-      setHp(cfg.hp);
-      setAtk(cfg.atk);
+      // Stats base da classe
+      let finalHp = cfg.hp;
+      let finalAtk = cfg.atk;
+      let finalSpd = cfg.spd;
+      let finalAc = cfg.ac;
+      
+      // Aplica bônus de raça se houver
+      if (raceBonus) {
+        finalHp += raceBonus.hp;
+        finalAtk += raceBonus.atk;
+        finalSpd += raceBonus.spd;
+        finalAc += raceBonus.ac;
+      }
+      
+      setHp(finalHp);
+      setAtk(finalAtk);
+      setSpd(finalSpd);
+      setAc(finalAc);
       setAttackType(cfg.attackType);
       setRange(cfg.range);
     } else {
       setHp(10);
       setAtk(5);
+      setSpd(5);
+      setAc(10);
       setAttackType("");
       setRange(1);
     }
   }
 
-  // Raça define velocidade
+  // Raça aplica bônus de stats
   function handleRaceChange(e) {
     const value = e.target.value;
     setRace(value);
-    if (["Humano", "Elfo", "Orc"].includes(value)) setSpd(4);
-    else if (["Gigante", "Ogro"].includes(value)) setSpd(6);
-    else if (["Halfling", "Gnomo"].includes(value)) setSpd(2);
-    else setSpd(5);
+    
+    const raceBonus = RACE_BONUS_CONFIG[value];
+    const classConfig = CLASS_CONFIG[cls];
+    
+    if (raceBonus && classConfig) {
+      // Aplica bônus de raça sobre os stats base da classe
+      setHp(classConfig.hp + raceBonus.hp);
+      setAtk(classConfig.atk + raceBonus.atk);
+      setSpd(classConfig.spd + raceBonus.spd);
+      setAc(classConfig.ac + raceBonus.ac);
+      
+      // Aplica bônus de atributos
+      setStr(raceBonus.str);
+      setDex(raceBonus.dex);
+      setInt(raceBonus.int);
+      setCha(raceBonus.cha);
+    } else if (raceBonus) {
+      // Se não tem classe selecionada, aplica apenas velocidade base
+      setSpd(raceBonus.spd);
+      setStr(raceBonus.str);
+      setDex(raceBonus.dex);
+      setInt(raceBonus.int);
+      setCha(raceBonus.cha);
+    }
   }
 
-  function addChar() {
+  async function addChar() {
     if (!name || !cls || !race) {
       setError("Nome, Classe e Raça são obrigatórios!");
       return;
     }
-    setCharacters([
-      ...characters,
-      {
-        name,
-        cls,
-        race,
-        hp,
-        atk,
-        spd,
-        currentHp: hp,
-        attackType,
-        range,
-        str,
-        dex,
-        int,
-        cha,
-        ac,
-      }
-    ]);
-    setName("");
-    setCls("");
-    setRace("");
-    setHp(10);
-    setAtk(5);
-    setSpd(5);
-    setAttackType("");
-    setRange(1);
-    setStr(0);
-    setDex(0);
-    setInt(0);
-    setCha(0);
-    setAc(10);
-    setError("");
+    
+    const cfg = CLASS_CONFIG[cls];
+    const newCharacter = {
+      name,
+      cls,
+      race,
+      hp,
+      atk,
+      spd,
+      currentHp: hp,
+      attackType,
+      range,
+      str,
+      dex,
+      int,
+      cha,
+      ac,
+      spriteUrl: cfg?.spriteUrl || null,
+      alive: true
+    };
+
+    try {
+      await saveCharacter(newCharacter);
+      
+      setCharacters([...characters, newCharacter]);
+      
+      setName("");
+      setCls("");
+      setRace("");
+      setHp(10);
+      setAtk(5);
+      setSpd(5);
+      setAttackType("");
+      setRange(1);
+      setStr(0);
+      setDex(0);
+      setInt(0);
+      setCha(0);
+      setAc(10);
+      setError("");
+    } catch (error) {
+      setError("Erro ao salvar personagem: " + error.message);
+    }
   }
 
-  function renderList() {
-    return characters.map((c, i) => (
-      <li key={i}>
-        <span className="status-highlight">{c.name}</span> ({c.cls}, {c.race}) —
-        <span style={{ color: "#22c55e" }}> HP:{c.hp}</span> /
-        <span style={{ color: "#3b82f6" }}> ATK:{c.atk}</span> /
-        <span style={{ color: "#a21caf" }}> SPD:{c.spd}</span> /
-        <span style={{ color: "#f59e0b" }}>
-          {" "}ATQ:{c.attackType}{c.attackType ? ` (alcance ${c.range})` : ""}
-        </span> /
-        <span> 💪FOR:{c.str} 🎯DES:{c.dex} 🧠INT:{c.int} 😎CAR:{c.cha} 🛡AC:{c.ac}</span>
-      </li>
-    ));
+  async function handleDeleteCharacter(id, index) {
+    try {
+      if (id) {
+        await removeCharacter(id);
+      }
+      setCharacters(characters.filter((_, i) => i !== index));
+    } catch (error) {
+      setError("Erro ao deletar personagem: " + error.message);
+    }
   }
 
   return (
-    <div className="flex-col" style={{ gap: "1rem" }}>
-      <input
-        placeholder="Nome"
-        value={name}
-        onChange={handleInput(setName)}
-        className={`border p-1 w-full${error && !name ? " status-dead" : ""}`}
-      />
+    <div className="p-4 space-y-4">
+      <h2 className="text-4xl font-bold text-center mb-6">Criador de Personagens</h2>
 
-      {/* Raça */}
-      <select
-        value={race}
-        onChange={handleRaceChange}
-        className={`border p-1 w-full${error && !race ? " status-dead" : ""}`}
-      >
-        <option value="">Selecione a Raça</option>
-        <option value="Humano">Humano</option>
-        <option value="Elfo">Elfo</option>
-        <option value="Orc">Orc</option>
-        <option value="Gigante">Gigante</option>
-        <option value="Ogro">Ogro</option>
-        <option value="Halfling">Halfling</option>
-        <option value="Gnomo">Gnomo</option>
-      </select>
-
-      {/* Classe */}
-      <select
-        value={cls}
-        onChange={handleClassChange}
-        className={`border p-1 w-full${error && !cls ? " status-dead" : ""}`}
-      >
-        <option value="">Selecione a Classe</option>
-        <option value="Guerreiro">Guerreiro</option>
-        <option value="Mago">Mago</option>
-        <option value="Arqueiro">Arqueiro</option>
-        <option value="Ladino">Ladino</option>
-        <option value="Feiticeiro">Feiticeiro</option>
-      </select>
-
-      {/* Atributos principais */}
-      <div className="flex-row" style={{ gap: "0.5rem", alignItems: "center" }}>
-        ❤️ HP:
-        <input
-          type="number"
-          readOnly
-          value={hp}
-          onChange={handleInput(setHp)}
-          className="border p-1 w-40px"
-        />
-        ⚔️ ATK:
-        <input
-          type="number"
-          readOnly
-          value={atk}
-          onChange={handleInput(setAtk)}
-          className="border p-1 w-40px"
-        />
-        🏃 SPD:
-        <input
-          readOnly
-          type="number"
-          value={spd}
-          onChange={handleInput(setSpd)}
-          className="border p-1 w-40px"
-        />
+      {/* Seleção Visual de Classes */}
+      <div>
+        <h3 className="text-lg font-semibold p-4 text-gray-400">Selecionar Classe</h3>
+        <Container className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4">
+          {Object.entries(CLASS_CONFIG).map(([className, config]) => (
+            <AnimatedEnemySprite
+              key={className}
+              enemy={{
+                id: className,
+                name: className,
+                spriteUrl: config.spriteUrl,
+                stats: {
+                  hp: config.hp,
+                  atk: config.atk,
+                  spd: config.spd,
+                  ac: config.ac
+                }
+              }}
+              isSelected={cls === className}
+              onClick={() => handleClassChange(className)}
+              size={64}
+            />
+          ))}
+        </Container>
       </div>
 
-      {/* Atributos secundários */}
-      <div className="flex-row" style={{ gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        💪 Força:<input type="number" value={str} onChange={handleInput(setStr)} className="border p-1 w-20"/>
-        🎯 Destreza:<input type="number" value={dex} onChange={handleInput(setDex)} className="border p-1 w-20"/>
-        🧠 Inteligência:<input type="number" value={int} onChange={handleInput(setInt)} className="border p-1 w-20"/>
-        😎 Carisma:<input type="number" value={cha} onChange={handleInput(setCha)} className="border p-1 w-20"/>
-        🛡 CA:<input type="number" value={ac} onChange={handleInput(setAc)} className="border p-1 w-20"/>
-      </div>
+      {/* Stats principais */}
+      <Container className="p-4">
+         <h3 className="text-lg font-semibold mb-4">Informações Básicas</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Nome:</label>
+            <input
+              placeholder="Nome do personagem"
+              value={name}
+              onChange={handleInput(setName)}
+              className={`w-full bg-[#123240] text-white border ${error && !name ? "border-red-500" : "border-gray-500"} rounded px-2 py-1 focus:border-cyan-300 focus:outline-none`}
+            />
+          </div>
 
-      {cls && (
-        <div className="text-sm text-white/80">
-          Ataque da classe: <b>{attackType || "—"}</b>
-          {attackType && <> | Alcance: <b>{range}</b></>}
+          <div>
+            <label className="block text-sm font-medium mb-1">Raça:</label>
+            <select
+              value={race}
+              onChange={handleRaceChange}
+              className={`w-full bg-[#123240] text-white border ${error && !race ? "border-red-500" : "border-gray-500"} rounded px-2 py-1 focus:border-cyan-300 focus:outline-none`}
+            >
+              <option value="">Selecione a Raça</option>
+              <option value="Humano">Humano</option>
+              <option value="Elfo">Elfo</option>
+              <option value="Orc">Orc</option>
+              <option value="Gigante">Gigante</option>
+              <option value="Ogro">Ogro</option>
+              <option value="Halfling">Halfling</option>
+              <option value="Gnomo">Gnomo</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Classe:</label>
+            <input
+              type="text"
+              value={cls}
+              readOnly
+              placeholder="Selecione acima"
+              className="w-full bg-[#0a1f2e] text-white border border-gray-500 rounded px-2 py-1 cursor-not-allowed"
+            />
+          </div>
+        </div>
+
+        {cls && (
+          <div className="mt-3 text-sm text-gray-300 bg-[#1a3a47] p-2 rounded">
+            <strong>Ataque da classe:</strong> {attackType || "—"} 
+            {attackType && <> | <strong>Alcance:</strong> {range}</>}
+          </div>
+        )}
+        
+        {race && (
+          <div className="mt-3 text-sm text-gray-300 bg-[#1a3a47] p-2 rounded">
+            <strong>Raça:</strong> {race} - {RACE_BONUS_CONFIG[race]?.description}
+            <div className="mt-1 text-xs">
+              <strong>Bônus:</strong> {' '}
+              {RACE_BONUS_CONFIG[race]?.hp !== 0 && `HP ${RACE_BONUS_CONFIG[race]?.hp > 0 ? '+' : ''}${RACE_BONUS_CONFIG[race]?.hp} `}
+              {RACE_BONUS_CONFIG[race]?.atk !== 0 && `ATK ${RACE_BONUS_CONFIG[race]?.atk > 0 ? '+' : ''}${RACE_BONUS_CONFIG[race]?.atk} `}
+              {RACE_BONUS_CONFIG[race]?.spd !== 0 && `SPD ${RACE_BONUS_CONFIG[race]?.spd > 0 ? '+' : ''}${RACE_BONUS_CONFIG[race]?.spd} `}
+              {RACE_BONUS_CONFIG[race]?.ac !== 0 && `AC ${RACE_BONUS_CONFIG[race]?.ac > 0 ? '+' : ''}${RACE_BONUS_CONFIG[race]?.ac}`}
+            </div>
+          </div>
+        )}
+      </Container>
+
+      {/* Stats principais */}
+      <Container className="p-4">
+        <h3 className="text-lg font-semibold mb-4">Atributos Principais</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center p-3 border border-red-700 rounded">
+            <label className="block text-xs text-gray-300 mb-1">❤️ HP</label>
+            <input
+              type="number"
+              readOnly
+              value={hp}
+              className="w-full bg-transparent text-center text-2xl font-bold border-none focus:outline-none"
+            />
+          </div>
+          <div className="text-center p-3 border border-yellow-700 rounded">
+            <label className="block text-xs text-gray-300 mb-1">⚔️ ATK</label>
+            <input
+              type="number"
+              readOnly
+              value={atk}
+              className="w-full bg-transparent text-center text-2xl font-bold border-none focus:outline-none"
+            />
+          </div>
+          <div className="text-center p-3 border border-blue-700 rounded">
+            <label className="block text-xs text-gray-300 mb-1">🏃 SPD</label>
+            <input
+              type="number"
+              readOnly
+              value={spd}
+              className="w-full bg-transparent text-center text-2xl font-bold border-none focus:outline-none"
+            />
+          </div>
+        </div>
+        <h3 className="text-lg font-semibold mb-4">Atributos Secundários</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">💪 Força:</label>
+            <input
+              type="number"
+              value={str}
+              onChange={handleInput(setStr)}
+              className="w-full bg-[#123240] text-white border border-gray-500 rounded px-2 py-1 focus:border-cyan-300 focus:outline-none text-center"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">🎯 Destreza:</label>
+            <input
+              type="number"
+              value={dex}
+              onChange={handleInput(setDex)}
+              className="w-full bg-[#123240] text-white border border-gray-500 rounded px-2 py-1 focus:border-cyan-300 focus:outline-none text-center"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">🧠 Inteligência:</label>
+            <input
+              type="number"
+              value={int}
+              onChange={handleInput(setInt)}
+              className="w-full bg-[#123240] text-white border border-gray-500 rounded px-2 py-1 focus:border-cyan-300 focus:outline-none text-center"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">😎 Carisma:</label>
+            <input
+              type="number"
+              value={cha}
+              onChange={handleInput(setCha)}
+              className="w-full bg-[#123240] text-white border border-gray-500 rounded px-2 py-1 focus:border-cyan-300 focus:outline-none text-center"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">🛡 CA:</label>
+            <input
+              type="number"
+              value={ac}
+              onChange={handleInput(setAc)}
+              className="w-full bg-[#123240] text-white border border-gray-500 rounded px-2 py-1 focus:border-cyan-300 focus:outline-none text-center"
+            />
+          </div>
+        </div>
+      </Container>
+
+
+      {error && (
+        <div className="bg-red-900/30 border border-red-500 text-red-300 p-3 rounded text-center font-medium">
+          {error}
         </div>
       )}
 
-      {error && <div className="status-dead" style={{ fontWeight: 500 }}>{error}</div>}
+      <Button
+        onClick={addChar}
+        className="w-full"
+        variant="play"
+      >
+        ✨ Adicionar Personagem
+      </Button>
 
-      <button onClick={addChar} className="btn btn-primary w-full">Adicionar Personagem</button>
+      {/* Lista de personagens criados */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">
+          Personagens Criados <span className={`${characters.length === 0 ? "text-gray-400" : "text-green-400"}`}>({characters.length})</span>:
+        </h3>
+        {characters.length === 0 ? (
+          <Container className="text-center py-8">
+            <div className="text-gray-400">Nenhum personagem criado ainda</div>
+            <p className="text-gray-500 text-sm mt-2">Preencha os campos acima para criar seu primeiro personagem!</p>
+          </Container>
+        ) : (
+          <Container className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {characters.map((c, i) => (
+              <div key={i} className="p-4 border border-gray-500 rounded bg-[#0a1f2e]">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-3">
+                    {c.spriteUrl && (
+                      <div className="shrink-0">
+                        <AnimatedEnemySprite 
+                          enemy={{ spriteUrl: c.spriteUrl, name: c.name }} 
+                          showName={false}
+                          size={32}
+                          mainClass="border-0 p-0 ring-0 cursor-default hover:brightness-100"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="font-semibold text-2xl text-cyan-400">{c.name}</h4>
+                      <p className="text-sm text-gray-400">{c.race} • {c.cls}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCharacter(c.id, i)}
+                    className="text-red-400 hover:text-red-300 text-xl transition-colors"
+                    title="Deletar personagem"
+                  >
+                    🗑️
+                  </button>
+                </div>
 
-      <ul className="list-disc pl-5 text-white">
-        {renderList()}
-      </ul>
+                {/* Stats principais */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="text-center p-2 bg-red-900/20 border border-red-700/50 rounded">
+                    <div className="text-sm font-bold">❤️ {c.hp}</div>
+                    <div className="text-xs text-gray-400">HP</div>
+                  </div>
+                  <div className="text-center p-2 bg-yellow-900/20 border border-yellow-700/50 rounded">
+                    <div className="text-sm font-bold">⚔️ {c.atk}</div>
+                    <div className="text-xs text-gray-400">ATK</div>
+                  </div>
+                  <div className="text-center p-2 bg-blue-900/20 border border-blue-700/50 rounded">
+                    <div className="text-sm font-bold">🏃 {c.spd}</div>
+                    <div className="text-xs text-gray-400">SPD</div>
+                  </div>
+                </div>
+
+                {/* Atributos secundários */}
+                <div className="text-xs text-gray-300 space-y-1">
+                  <div className="flex justify-between">
+                    <span>💪 Força: <strong>{c.str}</strong></span>
+                    <span>🎯 Destreza: <strong>{c.dex}</strong></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🧠 Inteligência: <strong>{c.int}</strong></span>
+                    <span>😎 Carisma: <strong>{c.cha}</strong></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🛡 CA: <strong>{c.ac}</strong></span>
+                    <span>⚔️ Ataque: <strong>{c.attackType} ({c.range})</strong></span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </Container>
+        )}
+      </div>
     </div>
   );
 }
