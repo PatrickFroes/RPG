@@ -3,13 +3,15 @@ import { Container } from "./Containers"
 import { Button } from "./Inputs.jsx"
 import AnimatedEnemySprite from "../data/functions.jsx"
 import { ENEMY_TYPES } from "../data/entityData.js"
-import { saveEnemy, removeEnemy } from "../api"
+import { saveEnemy, removeEnemy, toggleEnemyFavorite, loadEnemies, updateEnemy } from "../api"
 // Tipos de inimigos disponíveis
 
 
 
 export default function EnemyCreator({ enemies, setEnemies }) {
 	const [selectedEnemy, setSelectedEnemy] = useState(null)
+	const [editingId, setEditingId] = useState(null)
+	const [showOnlyFavorites, setShowOnlyFavorites] = useState(false)
 	const [customStats, setCustomStats] = useState({
 		name: "",
 		hp: 10,
@@ -33,21 +35,24 @@ export default function EnemyCreator({ enemies, setEnemies }) {
 	const handleAddEnemy = async () => {
 		if (!customStats.name || !selectedEnemy) return
 
-		const newEnemy = {
+		const enemyData = {
 			name: customStats.name,
 			type: selectedEnemy.type,
 			hp: customStats.hp,
 			atk: customStats.atk,
 			spd: customStats.spd,
+			ac: customStats.ac,
+			attackType: customStats.attackType,
+			range: customStats.range,
 			spriteUrl: selectedEnemy.spriteUrl,
 		}
 
 		try {
-			await saveEnemy(newEnemy)
-			
-			setEnemies([
-				...enemies,
-				{
+			if (editingId) {
+				// Atualizar inimigo existente
+				await updateEnemy(editingId, enemyData)
+				setEnemies(enemies.map(e => e.id === editingId ? {
+					...e,
 					...selectedEnemy,
 					name: customStats.name,
 					stats: {
@@ -58,10 +63,28 @@ export default function EnemyCreator({ enemies, setEnemies }) {
 					},
 					attackType: customStats.attackType,
 					range: customStats.range,
-					currentHp: customStats.hp,
-					alive: true,
-				},
-			])
+				} : e))
+			} else {
+				// Criar novo inimigo
+				await saveEnemy(enemyData)
+				setEnemies([
+					...enemies,
+					{
+						...selectedEnemy,
+						name: customStats.name,
+						stats: {
+							hp: customStats.hp,
+							atk: customStats.atk,
+							spd: customStats.spd,
+							ac: customStats.ac,
+						},
+						attackType: customStats.attackType,
+						range: customStats.range,
+						currentHp: customStats.hp,
+						alive: true,
+					},
+				])
+			}
 
 			// Reset
 			setCustomStats({
@@ -74,6 +97,7 @@ export default function EnemyCreator({ enemies, setEnemies }) {
 				range: 1,
 			})
 			setSelectedEnemy(null)
+			setEditingId(null)
 		} catch (error) {
 			console.error("Erro ao salvar inimigo:", error)
 		}
@@ -88,6 +112,100 @@ export default function EnemyCreator({ enemies, setEnemies }) {
 		} catch (error) {
 			console.error("Erro ao deletar inimigo:", error)
 		}
+	}
+
+	const handleToggleFavorite = async (id, index) => {
+		try {
+			await toggleEnemyFavorite(id)
+			const updatedEnemies = [...enemies]
+			updatedEnemies[index] = { 
+				...updatedEnemies[index], 
+				isFavorite: !updatedEnemies[index].isFavorite 
+			}
+			setEnemies(updatedEnemies)
+		} catch (error) {
+			console.error("Erro ao marcar favorito:", error)
+		}
+	}
+
+	const handleEditEnemy = (enemy) => {
+		// Encontrar o tipo do inimigo
+		const enemyType = ENEMY_TYPES.find(e => e.type === enemy.type)
+		if (enemyType) {
+			setSelectedEnemy(enemyType)
+		}
+		
+		setCustomStats({
+			name: enemy.name,
+			hp: enemy.stats?.hp || enemy.hp,
+			atk: enemy.stats?.atk || enemy.atk,
+			spd: enemy.stats?.spd || enemy.spd,
+			ac: enemy.stats?.ac || enemy.ac,
+			attackType: enemy.attackType || "melee",
+			range: enemy.range || 1,
+		})
+		setEditingId(enemy.id)
+		window.scrollTo({ top: 0, behavior: 'smooth' })
+	}
+
+	const handleCancelEdit = () => {
+		setEditingId(null)
+		setSelectedEnemy(null)
+		setCustomStats({
+			name: "",
+			hp: 10,
+			atk: 3,
+			spd: 3,
+			ac: 12,
+			attackType: "melee",
+			range: 1,
+		})
+	}
+
+	const exportEnemies = () => {
+		const dataStr = JSON.stringify(enemies, null, 2)
+		const dataBlob = new Blob([dataStr], { type: 'application/json' })
+		const url = URL.createObjectURL(dataBlob)
+		const link = document.createElement('a')
+		link.href = url
+		link.download = `inimigos_${new Date().toISOString().split('T')[0]}.json`
+		link.click()
+		URL.revokeObjectURL(url)
+	}
+
+	const importEnemies = (event) => {
+		const file = event.target.files[0]
+		if (!file) return
+		
+		const reader = new FileReader()
+		reader.onload = async (e) => {
+			try {
+				const importedData = JSON.parse(e.target.result)
+				if (!Array.isArray(importedData)) {
+					alert('Formato de arquivo inválido')
+					return
+				}
+				
+				// Salvar cada inimigo importado
+				for (const enemy of importedData) {
+					try {
+						await saveEnemy(enemy)
+					} catch (error) {
+						console.error('Erro ao importar inimigo:', enemy.name, error)
+					}
+				}
+				
+				// Recarregar a lista
+				const updated = await loadEnemies()
+				setEnemies(updated)
+				alert(`${importedData.length} inimigo(s) importado(s) com sucesso!`)
+			} catch (error) {
+				console.error('Erro ao importar:', error)
+				alert('Erro ao importar arquivo JSON')
+			}
+		}
+		reader.readAsText(file)
+		event.target.value = '' // Reset input
 	}
 
 	return (
@@ -226,19 +344,60 @@ export default function EnemyCreator({ enemies, setEnemies }) {
 						</div>
 					</Container>
 
-					<Button
-						onClick={handleAddEnemy}
-						className="mt-4 w-full"
-						disabled={!customStats.name}
-					>
-						Adicionar Inimigo
-					</Button>
+					{editingId && (
+						<div className="mt-4 p-3 bg-yellow-900/30 border border-yellow-600 rounded text-yellow-200 text-sm">
+							⚠️ Editando inimigo. Clique em "Cancelar Edição" para voltar ao modo de criação.
+						</div>
+					)}
+					<div className="flex gap-2 mt-4">
+						<Button
+							onClick={handleAddEnemy}
+							className="flex-1"
+							disabled={!customStats.name}
+						>
+							{editingId ? '✏️ Atualizar Inimigo' : '✨ Adicionar Inimigo'}
+						</Button>
+						{editingId && (
+							<Button
+								onClick={handleCancelEdit}
+								className="bg-gray-600 hover:bg-gray-500"
+							>
+								Cancelar Edição
+							</Button>
+						)}
+					</div>
 				</Container>
 			)}
 
 			{/* Lista de inimigos criados */}
 			<div>
-				<h3 className="text-lg font-semibold mb-3">Inimigos Criados <span className={`${enemies.length === 0 ? "text-gray-400" : "text-green-400"}`}>({enemies.length})</span>:</h3>
+				<div className="flex justify-between items-center mb-3">
+					<h3 className="text-lg font-semibold">Inimigos Criados <span className={`${enemies.length === 0 ? "text-gray-400" : "text-green-400"}`}>({enemies.filter(e => !showOnlyFavorites || e.isFavorite).length})</span>:</h3>
+					<div className="flex gap-2">
+						<label className="px-3 py-1 rounded text-sm transition-colors bg-blue-700 text-white hover:bg-blue-600 cursor-pointer" title="Importar inimigos de JSON">
+							↑ Importar JSON
+							<input type="file" accept=".json" onChange={importEnemies} className="hidden" />
+						</label>
+						<button
+							onClick={exportEnemies}
+							disabled={enemies.length === 0}
+							className="px-3 py-1 rounded text-sm transition-colors bg-green-700 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+							title="Exportar inimigos em JSON"
+						>
+							↓ Exportar JSON
+						</button>
+						<button
+							onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+							className={`px-3 py-1 rounded text-sm transition-colors ${
+								showOnlyFavorites 
+									? 'bg-yellow-600 text-white hover:bg-yellow-500' 
+									: 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+							}`}
+						>
+							{showOnlyFavorites ? '★ Apenas Favoritos' : '☆ Mostrar Favoritos'}
+						</button>
+					</div>
+				</div>
 				{enemies.length === 0 ? (
 					<Container className="text-center py-8">
 						<div className="text-gray-400">Nenhum inimigo criado ainda</div>
@@ -246,18 +405,38 @@ export default function EnemyCreator({ enemies, setEnemies }) {
 					</Container>
 				) : (
 					<Container className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-						{enemies.map((enemy, i) => (
+						{enemies.filter(e => !showOnlyFavorites || e.isFavorite).map((enemy, i) => (
 							<div
 								key={i}
 								className="p-3 border border-gray-500 rounded relative"
 							>
+							<div className="absolute top-2 right-2 flex gap-1">
+								<button
+									onClick={() => handleEditEnemy(enemy)}
+									className="w-8 h-8 flex items-center justify-center rounded bg-blue-600/80 hover:bg-blue-500 text-white transition-all hover:scale-110 shadow-lg"
+									title="Editar inimigo"
+								>
+									<span className="text-sm">✏️</span>
+								</button>
+								<button
+									onClick={() => handleToggleFavorite(enemy.id, i)}
+									className={`w-8 h-8 flex items-center justify-center rounded transition-all hover:scale-110 shadow-lg ${
+										enemy.isFavorite 
+											? 'bg-yellow-500/80 hover:bg-yellow-400 text-white' 
+											: 'bg-gray-600/80 hover:bg-gray-500 text-gray-300'
+									}`}
+									title={enemy.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+								>
+									<span className="text-sm">{enemy.isFavorite ? '★' : '☆'}</span>
+								</button>
 								<button
 									onClick={() => handleDeleteEnemy(enemy.id, i)}
-									className="absolute top-2 right-2 text-red-400 hover:text-red-300 transition-colors"
+									className="w-8 h-8 flex items-center justify-center rounded bg-red-600/80 hover:bg-red-500 text-white transition-all hover:scale-110 shadow-lg"
 									title="Deletar inimigo"
 								>
-									🗑️
+									<span className="text-lg font-bold">×</span>
 								</button>
+							</div>
 								<AnimatedEnemySprite
 									enemy={enemy}
 									isSelected={false}

@@ -6,12 +6,18 @@ import {
   createCharacter,
   getCharactersByUserId,
   deleteCharacter,
+  updateCharacter,
+  toggleCharacterFavorite,
   createEnemy,
   getEnemiesByUserId,
   deleteEnemy,
+  updateEnemy,
+  toggleEnemyFavorite,
   createMap,
   getMapsByUserId,
-  deleteMap
+  deleteMap,
+  updateMap,
+  toggleMapFavorite
 } from './database.js';
 
 const app = express();
@@ -118,6 +124,7 @@ app.get('/api/characters', authMiddleware, (req, res) => {
       int: c.int,
       cha: c.cha,
       spriteUrl: c.sprite_url,
+      isFavorite: c.is_favorite === 1,
       currentHp: c.hp,
       alive: true
     }));
@@ -131,6 +138,26 @@ app.get('/api/characters', authMiddleware, (req, res) => {
 app.delete('/api/characters/:id', authMiddleware, (req, res) => {
   try {
     deleteCharacter(req.params.id, req.userId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Atualizar personagem
+app.put('/api/characters/:id', authMiddleware, (req, res) => {
+  try {
+    updateCharacter(req.params.id, req.userId, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle favorito de personagem
+app.patch('/api/characters/:id/favorite', authMiddleware, (req, res) => {
+  try {
+    toggleCharacterFavorite(req.params.id, req.userId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -164,7 +191,8 @@ app.get('/api/enemies', authMiddleware, (req, res) => {
       hp: e.hp,
       atk: e.atk,
       spd: e.spd,
-      spriteUrl: e.sprite_url
+      spriteUrl: e.sprite_url,
+      isFavorite: e.is_favorite === 1
     }));
     res.json(formatted);
   } catch (error) {
@@ -176,6 +204,26 @@ app.get('/api/enemies', authMiddleware, (req, res) => {
 app.delete('/api/enemies/:id', authMiddleware, (req, res) => {
   try {
     deleteEnemy(req.params.id, req.userId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Atualizar inimigo
+app.put('/api/enemies/:id', authMiddleware, (req, res) => {
+  try {
+    updateEnemy(req.params.id, req.userId, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle favorito de inimigo
+app.patch('/api/enemies/:id/favorite', authMiddleware, (req, res) => {
+  try {
+    toggleEnemyFavorite(req.params.id, req.userId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -203,7 +251,8 @@ app.get('/api/maps', authMiddleware, (req, res) => {
       name: m.name,
       grid: JSON.parse(m.grid_data),
       rows: m.rows,
-      cols: m.cols
+      cols: m.cols,
+      isFavorite: m.is_favorite === 1
     }));
     res.json(formatted);
   } catch (error) {
@@ -215,6 +264,26 @@ app.get('/api/maps', authMiddleware, (req, res) => {
 app.delete('/api/maps/:id', authMiddleware, (req, res) => {
   try {
     deleteMap(req.params.id, req.userId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Atualizar mapa
+app.put('/api/maps/:id', authMiddleware, (req, res) => {
+  try {
+    updateMap(req.params.id, req.userId, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle favorito de mapa
+app.patch('/api/maps/:id/favorite', authMiddleware, (req, res) => {
+  try {
+    toggleMapFavorite(req.params.id, req.userId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

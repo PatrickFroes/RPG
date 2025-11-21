@@ -33,6 +33,7 @@ db.exec(`
     int INTEGER DEFAULT 0,
     cha INTEGER DEFAULT 0,
     sprite_url TEXT,
+    is_favorite INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
@@ -46,6 +47,7 @@ db.exec(`
     atk INTEGER NOT NULL,
     spd INTEGER NOT NULL,
     sprite_url TEXT,
+    is_favorite INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
@@ -57,6 +59,7 @@ db.exec(`
     grid_data TEXT NOT NULL,
     rows INTEGER NOT NULL,
     cols INTEGER NOT NULL,
+    is_favorite INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
@@ -113,6 +116,38 @@ export const deleteCharacter = (id, userId) => {
   return stmt.run(id, userId);
 };
 
+export const updateCharacter = (id, userId, character) => {
+  const stmt = db.prepare(`
+    UPDATE characters 
+    SET name = ?, class = ?, race = ?, hp = ?, atk = ?, spd = ?, ac = ?, 
+        attack_type = ?, range = ?, str = ?, dex = ?, int = ?, cha = ?, sprite_url = ?
+    WHERE id = ? AND user_id = ?
+  `);
+  return stmt.run(
+    character.name,
+    character.cls,
+    character.race,
+    character.hp,
+    character.atk,
+    character.spd,
+    character.ac || 10,
+    character.attackType || 'melee',
+    character.range || 1,
+    character.str || 0,
+    character.dex || 0,
+    character.int || 0,
+    character.cha || 0,
+    character.spriteUrl || null,
+    id,
+    userId
+  );
+};
+
+export const toggleCharacterFavorite = (id, userId) => {
+  const stmt = db.prepare('UPDATE characters SET is_favorite = NOT is_favorite WHERE id = ? AND user_id = ?');
+  return stmt.run(id, userId);
+};
+
 // Funções para inimigos
 export const createEnemy = (userId, enemy) => {
   const stmt = db.prepare(`
@@ -140,6 +175,29 @@ export const deleteEnemy = (id, userId) => {
   return stmt.run(id, userId);
 };
 
+export const updateEnemy = (id, userId, enemy) => {
+  const stmt = db.prepare(`
+    UPDATE enemies 
+    SET name = ?, type = ?, hp = ?, atk = ?, spd = ?, sprite_url = ?
+    WHERE id = ? AND user_id = ?
+  `);
+  return stmt.run(
+    enemy.name,
+    enemy.type || 'unknown',
+    enemy.hp,
+    enemy.atk,
+    enemy.spd,
+    enemy.spriteUrl || null,
+    id,
+    userId
+  );
+};
+
+export const toggleEnemyFavorite = (id, userId) => {
+  const stmt = db.prepare('UPDATE enemies SET is_favorite = NOT is_favorite WHERE id = ? AND user_id = ?');
+  return stmt.run(id, userId);
+};
+
 // Funções para mapas
 export const createMap = (userId, mapData) => {
   const stmt = db.prepare(`
@@ -156,6 +214,27 @@ export const getMapsByUserId = (userId) => {
 
 export const deleteMap = (id, userId) => {
   const stmt = db.prepare('DELETE FROM maps WHERE id = ? AND user_id = ?');
+  return stmt.run(id, userId);
+};
+
+export const updateMap = (id, userId, mapData) => {
+  const stmt = db.prepare(`
+    UPDATE maps 
+    SET name = ?, grid_data = ?, rows = ?, cols = ?
+    WHERE id = ? AND user_id = ?
+  `);
+  return stmt.run(
+    mapData.name,
+    JSON.stringify(mapData.grid),
+    mapData.rows,
+    mapData.cols,
+    id,
+    userId
+  );
+};
+
+export const toggleMapFavorite = (id, userId) => {
+  const stmt = db.prepare('UPDATE maps SET is_favorite = NOT is_favorite WHERE id = ? AND user_id = ?');
   return stmt.run(id, userId);
 };
 

@@ -42,6 +42,15 @@ export const removeCharacter = async (id) => {
   return response.json();
 };
 
+export const updateCharacter = async (id, character) => {
+  const response = await fetch(`${API_URL}/characters/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(character),
+  });
+  return response.json();
+};
+
 // ==================== INIMIGOS ====================
 
 export const saveEnemy = async (enemy) => {
@@ -75,6 +84,15 @@ export const removeEnemy = async (id) => {
   return response.json();
 };
 
+export const updateEnemy = async (id, enemy) => {
+  const response = await fetch(`${API_URL}/enemies/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(enemy),
+  });
+  return response.json();
+};
+
 // ==================== MAPAS ====================
 
 export const saveMap = async (mapData) => {
@@ -97,6 +115,41 @@ export const loadMaps = async () => {
 export const removeMap = async (id) => {
   const response = await fetch(`${API_URL}/maps/${id}`, {
     method: 'DELETE',
+    headers: getHeaders(),
+  });
+  return response.json();
+};
+
+export const updateMap = async (id, mapData) => {
+  const response = await fetch(`${API_URL}/maps/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(mapData),
+  });
+  return response.json();
+};
+
+// ==================== FAVORITOS ====================
+
+export const toggleCharacterFavorite = async (id) => {
+  const response = await fetch(`${API_URL}/characters/${id}/favorite`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+  });
+  return response.json();
+};
+
+export const toggleEnemyFavorite = async (id) => {
+  const response = await fetch(`${API_URL}/enemies/${id}/favorite`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+  });
+  return response.json();
+};
+
+export const toggleMapFavorite = async (id) => {
+  const response = await fetch(`${API_URL}/maps/${id}/favorite`, {
+    method: 'PATCH',
     headers: getHeaders(),
   });
   return response.json();

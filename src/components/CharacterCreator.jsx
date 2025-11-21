@@ -3,7 +3,7 @@ import { CLASS_CONFIG, RACE_BONUS_CONFIG } from "../data/entityData.js"
 import { Container } from "./Containers"
 import { Button } from "./Inputs"
 import AnimatedEnemySprite from "../data/functions.jsx"
-import { saveCharacter, removeCharacter } from "../api"
+import { saveCharacter, removeCharacter, toggleCharacterFavorite, loadCharacters, updateCharacter } from "../api"
 
 
 export default function CharacterCreator({ characters, setCharacters }) {
@@ -22,7 +22,9 @@ export default function CharacterCreator({ characters, setCharacters }) {
   const [dex, setDex] = useState(0);
   const [int, setInt] = useState(0);
   const [cha, setCha] = useState(0);
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [ac, setAc] = useState(10);
+  const [editingId, setEditingId] = useState(null);
 
   function handleInput(setter) {
     return e => setter(e.target.value);
@@ -123,10 +125,21 @@ export default function CharacterCreator({ characters, setCharacters }) {
     };
 
     try {
-      await saveCharacter(newCharacter);
+      if (editingId) {
+        // Modo de edição
+        await updateCharacter(editingId, newCharacter);
+        const updatedCharacters = characters.map(c => 
+          c.id === editingId ? { ...newCharacter, id: editingId } : c
+        );
+        setCharacters(updatedCharacters);
+        setEditingId(null);
+      } else {
+        // Modo de criação
+        await saveCharacter(newCharacter);
+        setCharacters([...characters, newCharacter]);
+      }
       
-      setCharacters([...characters, newCharacter]);
-      
+      // Limpar formulário
       setName("");
       setCls("");
       setRace("");
@@ -156,6 +169,102 @@ export default function CharacterCreator({ characters, setCharacters }) {
       setError("Erro ao deletar personagem: " + error.message);
     }
   }
+
+  const handleToggleFavorite = async (characterId, idx) => {
+    try {
+      await toggleCharacterFavorite(characterId);
+      const updatedCharacters = [...characters];
+      updatedCharacters[idx] = { 
+        ...updatedCharacters[idx], 
+        isFavorite: !updatedCharacters[idx].isFavorite 
+      };
+      setCharacters(updatedCharacters);
+    } catch (error) {
+      console.error('Erro ao marcar favorito:', error);
+    }
+  };
+
+  const handleEditCharacter = (character) => {
+    setEditingId(character.id);
+    setName(character.name);
+    setCls(character.cls);
+    setRace(character.race);
+    setHp(character.hp);
+    setAtk(character.atk);
+    setSpd(character.spd);
+    setAc(character.ac);
+    setAttackType(character.attackType);
+    setRange(character.range);
+    setStr(character.str || 0);
+    setDex(character.dex || 0);
+    setInt(character.int || 0);
+    setCha(character.cha || 0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setName("");
+    setCls("");
+    setRace("");
+    setHp(10);
+    setAtk(5);
+    setSpd(5);
+    setAttackType("");
+    setRange(1);
+    setStr(0);
+    setDex(0);
+    setInt(0);
+    setCha(0);
+    setAc(10);
+    setError("");
+  };
+
+  const exportCharacters = () => {
+    const dataStr = JSON.stringify(characters, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `personagens_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importCharacters = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        if (!Array.isArray(importedData)) {
+          alert('Formato de arquivo inválido');
+          return;
+        }
+        
+        // Salvar cada personagem importado
+        for (const char of importedData) {
+          try {
+            await saveCharacter(char);
+          } catch (error) {
+            console.error('Erro ao importar personagem:', char.name, error);
+          }
+        }
+        
+        // Recarregar a lista
+        const updated = await loadCharacters();
+        setCharacters(updated);
+        alert(`${importedData.length} personagem(ns) importado(s) com sucesso!`);
+      } catch (error) {
+        console.error('Erro ao importar:', error);
+        alert('Erro ao importar arquivo JSON');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // Reset input
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -342,19 +451,54 @@ export default function CharacterCreator({ characters, setCharacters }) {
         </div>
       )}
 
+      {editingId && (
+        <div className="bg-yellow-900/20 border border-yellow-600 p-3 rounded text-center">
+          <p className="text-yellow-400">Editando personagem. Clique em "Atualizar" para salvar as alterações.</p>
+          <Button onClick={handleCancelEdit} variant="default" className="mt-2">
+            Cancelar Edição
+          </Button>
+        </div>
+      )}
+
       <Button
         onClick={addChar}
         className="w-full"
         variant="play"
       >
-        ✨ Adicionar Personagem
+        {editingId ? '✏️ Atualizar Personagem' : '✨ Adicionar Personagem'}
       </Button>
 
       {/* Lista de personagens criados */}
       <div>
-        <h3 className="text-lg font-semibold mb-3">
-          Personagens Criados <span className={`${characters.length === 0 ? "text-gray-400" : "text-green-400"}`}>({characters.length})</span>:
-        </h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold">
+            Personagens Criados <span className={`${characters.length === 0 ? "text-gray-400" : "text-green-400"}`}>({characters.filter(c => !showOnlyFavorites || c.isFavorite).length})</span>:
+          </h3>
+          <div className="flex gap-2">
+            <label className="px-3 py-1 rounded text-sm transition-colors bg-blue-700 text-white hover:bg-blue-600 cursor-pointer" title="Importar personagens de JSON">
+              ↑ Importar JSON
+              <input type="file" accept=".json" onChange={importCharacters} className="hidden" />
+            </label>
+            <button
+              onClick={exportCharacters}
+              disabled={characters.length === 0}
+              className="px-3 py-1 rounded text-sm transition-colors bg-green-700 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Exportar personagens em JSON"
+            >
+              ↓ Exportar JSON
+            </button>
+            <button
+              onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+              className={`px-3 py-1 rounded text-sm transition-colors ${
+                showOnlyFavorites 
+                  ? 'bg-yellow-600 text-white hover:bg-yellow-500' 
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              {showOnlyFavorites ? '★ Apenas Favoritos' : '☆ Mostrar Favoritos'}
+            </button>
+          </div>
+        </div>
         {characters.length === 0 ? (
           <Container className="text-center py-8">
             <div className="text-gray-400">Nenhum personagem criado ainda</div>
@@ -362,7 +506,7 @@ export default function CharacterCreator({ characters, setCharacters }) {
           </Container>
         ) : (
           <Container className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {characters.map((c, i) => (
+            {characters.filter(c => !showOnlyFavorites || c.isFavorite).map((c, i) => (
               <div key={i} className="p-4 border border-gray-500 rounded bg-[#0a1f2e]">
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center gap-3">
@@ -379,18 +523,36 @@ export default function CharacterCreator({ characters, setCharacters }) {
                     <div>
                       <h4 className="font-semibold text-2xl text-cyan-400">{c.name}</h4>
                       <p className="text-sm text-gray-400">{c.race} • {c.cls}</p>
-                    </div>
                   </div>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleEditCharacter(c)}
+                    className="w-8 h-8 flex items-center justify-center rounded bg-blue-600/80 hover:bg-blue-500 text-white transition-all hover:scale-110 shadow-lg"
+                    title="Editar personagem"
+                  >
+                    <span className="text-sm">✏️</span>
+                  </button>
+                  <button
+                    onClick={() => handleToggleFavorite(c.id, i)}
+                    className={`w-8 h-8 flex items-center justify-center rounded transition-all hover:scale-110 shadow-lg ${
+                      c.isFavorite 
+                        ? 'bg-yellow-500/80 hover:bg-yellow-400 text-white' 
+                        : 'bg-gray-600/80 hover:bg-gray-500 text-gray-300'
+                    }`}
+                    title={c.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                  >
+                    <span className="text-sm">{c.isFavorite ? '★' : '☆'}</span>
+                  </button>
                   <button
                     onClick={() => handleDeleteCharacter(c.id, i)}
-                    className="text-red-400 hover:text-red-300 text-xl transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded bg-red-600/80 hover:bg-red-500 text-white transition-all hover:scale-110 shadow-lg"
                     title="Deletar personagem"
                   >
-                    🗑️
+                    <span className="text-lg font-bold">×</span>
                   </button>
                 </div>
-
-                {/* Stats principais */}
+              </div>                {/* Stats principais */}
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <div className="text-center p-2 bg-red-900/20 border border-red-700/50 rounded">
                     <div className="text-sm font-bold">❤️ {c.hp}</div>
